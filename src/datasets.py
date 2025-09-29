@@ -1,7 +1,7 @@
 import os
 import torch
-import torchaudio
 from torch.utils.data import Dataset
+import torchaudio
 
 class AudioDataset(Dataset):
     def __init__(self, input_dir, target_dir, segment_length=16384):
@@ -15,12 +15,22 @@ class AudioDataset(Dataset):
         return len(self.input_files)
 
     def __getitem__(self, idx):
-        inp, _ = torchaudio.load(os.path.join(self.input_dir, self.input_files[idx]))
-        tgt, _ = torchaudio.load(os.path.join(self.target_dir, self.target_files[idx]))
+        waveform_in, sr_in = torchaudio.load(
+            os.path.join(self.input_dir, self.input_files[idx]), normalize=True
+        )
+        waveform_tgt, sr_tgt = torchaudio.load(
+            os.path.join(self.target_dir, self.target_files[idx]), normalize=True
+        )
 
-        # zkrátíme/zarovnáme
-        min_len = min(inp.shape[1], tgt.shape[1], self.segment_length)
-        inp = inp[:, :min_len]
-        tgt = tgt[:, :min_len]
+        # převod na mono, pokud je stereo
+        if waveform_in.shape[0] > 1:
+            waveform_in = waveform_in.mean(dim=0, keepdim=True)
+        if waveform_tgt.shape[0] > 1:
+            waveform_tgt = waveform_tgt.mean(dim=0, keepdim=True)
 
-        return inp, tgt
+        # zkrácení na segment_length
+        min_len = min(waveform_in.shape[1], waveform_tgt.shape[1], self.segment_length)
+        waveform_in = waveform_in[:, :min_len]
+        waveform_tgt = waveform_tgt[:, :min_len]
+
+        return waveform_in, waveform_tgt
