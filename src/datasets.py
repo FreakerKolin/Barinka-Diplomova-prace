@@ -1,36 +1,35 @@
 import os
 import torch
-from torch.utils.data import Dataset
 import torchaudio
+from torch.utils.data import Dataset
 
-class AudioDataset(Dataset):
-    def __init__(self, input_dir, target_dir, segment_length=16384):
+class AudioDataset(Dataset):#načte soubory z adresářů MUSÍ SE JMENOVAT STEJNĚ a připraví na trénink
+    def __init__(self, input_dir, target_dir, segment_length=512):
         self.input_files = sorted(os.listdir(input_dir))
         self.target_files = sorted(os.listdir(target_dir))
         self.input_dir = input_dir
         self.target_dir = target_dir
         self.segment_length = segment_length
 
-    def __len__(self):
+    def __len__(self):#vrátí počet souborů
         return len(self.input_files)
 
-    def __getitem__(self, idx):
-        waveform_in, sr_in = torchaudio.load(
-            os.path.join(self.input_dir, self.input_files[idx]), normalize=True
-        )
-        waveform_tgt, sr_tgt = torchaudio.load(
-            os.path.join(self.target_dir, self.target_files[idx]), normalize=True
-        )
+    def __getitem__(self, idx):#vrátí načtený a připravený pár souborů
+        input_path = os.path.join(self.input_dir, self.input_files[idx])
+        target_path = os.path.join(self.target_dir, self.target_files[idx])
 
-        # převod na mono, pokud je stereo
-        if waveform_in.shape[0] > 1:
-            waveform_in = waveform_in.mean(dim=0, keepdim=True)
-        if waveform_tgt.shape[0] > 1:
-            waveform_tgt = waveform_tgt.mean(dim=0, keepdim=True)
+        inp, sr_inp = torchaudio.load(input_path)
+        tgt, sr_tgt = torchaudio.load(target_path)
 
-        # zkrácení na segment_length
-        min_len = min(waveform_in.shape[1], waveform_tgt.shape[1], self.segment_length)
-        waveform_in = waveform_in[:, :min_len]
-        waveform_tgt = waveform_tgt[:, :min_len]
+        # převod na mono, zprůměrování kanálů
+        if inp.shape[0] > 1:
+            inp = inp.mean(dim=0, keepdim=True)
+        if tgt.shape[0] > 1:
+            tgt = tgt.mean(dim=0, keepdim=True)
 
-        return waveform_in, waveform_tgt
+       # ořízne oba signály na stejnou délku, maximálně segment_length
+        min_len = min(inp.shape[1], tgt.shape[1], self.segment_length)
+        inp = inp[:, :min_len]
+        tgt = tgt[:, :min_len]
+
+        return inp, tgt

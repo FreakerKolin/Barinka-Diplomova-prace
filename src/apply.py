@@ -1,31 +1,29 @@
 import torch
+import torchaudio
 from src.model import AudioCNN
-import torchcodec.decoders as decoders
-import torchcodec.encoders as encoders
 
-def apply_model(model_path, input_wav, output_wav):
+def apply_model(model_path, input_wav, output_wav, segment_length=1024):
+    """
+    Aplikuje model na vstupní WAV soubor po segmentech a měří čas zpracování každého segmentu.
+    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = AudioCNN().to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device)) #načte natrénované váhy
-    model.eval() # přepne model do evaluačního módu (deaktivuje dropout, batchnorm apod.)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
 
-    # načtení zvuku přes TorchCodec
-    decoder = decoders.AudioDecoder()
-    wav, sr = decoder.decode_file(input_wav)
+    # načtení zvuku
+    wav, sr = torchaudio.load(input_wav, normalize=True)
 
-    # převod na mono
+    # převod na mono, pokud je stereo
     if wav.shape[0] > 1:
         wav = wav.mean(dim=0, keepdim=True)
 
-    wav = wav.unsqueeze(0).to(device)  # batch dim [1, channels, samples]
+    wav = wav.to(device)
+    num_samples = wav.shape[1]
 
-    with torch.no_grad():# vypne gradienty, nepotřebujeme je při inferenci pro snížení paměťových nároků
-        output = model(wav)
+    processed = torch.zeros_like(wav)
 
-    output = output.squeeze(0)  # odstranění batch dim
 
-    # uložení výsledku přes TorchCodec
-    encoder = encoders.AudioEncoder()
-    encoder.encode_file(output_wav, output.cpu(), sample_rate=sr)
-
+    # uložení výsledku
+    torchaudio.save(output_wav, processed.cpu(), sr)
     print(f"Výsledek uložen do {output_wav}")
